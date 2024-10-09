@@ -82,15 +82,21 @@ func (r *CryptoReader) Read(p []byte) (int, error) {
 		buf = buf[:n]
 	}
 
-	n, err := r.ExternalFileReader.Read(buf)
-	if err != nil {
-		return n, err
+	n, externalErr := r.ExternalFileReader.Read(buf)
+	if externalErr != nil && externalErr != io.EOF {
+		return n, externalErr
 	}
+
 	// 如果获取值不到buf的长度，只解密真实的值
 	r.stream.XORKeyStream(p[:n], buf[:n])
-	_, err = r.hash.Write(p[:n])
+	_, err := r.hash.Write(p[:n])
 	if err != nil {
 		return 0, fmt.Errorf("write hash failed: %w", err)
+	}
+
+	// 先计算最后一段加密值，再返回 EOF
+	if externalErr == io.EOF {
+		return n, io.EOF
 	}
 
 	return n, nil
